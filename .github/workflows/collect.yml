@@ -7,7 +7,7 @@ on:
       mode:
         description: Authentication check or collection
         type: choice
-        options: [verify-auth, run, status-only]
+        options: [verify-auth, run, status-only, resume]
         default: verify-auth
 permissions:
   contents: read
@@ -44,6 +44,7 @@ jobs:
           case "$RUN_MODE" in
             verify-auth) args+=(--verify-auth) ;;
             status-only) args+=(--status-only) ;;
+            resume) args+=(--resume) ;;
             run) ;;
             *) echo 'Invalid mode'; exit 1 ;;
           esac

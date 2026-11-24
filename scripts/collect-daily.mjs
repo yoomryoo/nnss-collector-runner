@@ -6,8 +6,8 @@ import {recognizePoster} from './ocr-recognize.mjs';
 const flags=new Set(process.argv.slice(2));
 let config;
 if(flags.has('--env')){
- for(const flag of flags)if(!['--env','--status-only','--verify-auth'].includes(flag))throw new Error('Unknown collector option');
- config={origin:process.env.NNSS_ORIGIN||'https://nnss.kr',collectorToken:process.env.NNSS_COLLECTOR_TOKEN,statusOnly:flags.has('--status-only'),verifyAuth:flags.has('--verify-auth')};
+ for(const flag of flags)if(!['--env','--status-only','--verify-auth','--resume'].includes(flag))throw new Error('Unknown collector option');
+ config={origin:process.env.NNSS_ORIGIN||'https://nnss.kr',collectorToken:process.env.NNSS_COLLECTOR_TOKEN,statusOnly:flags.has('--status-only'),verifyAuth:flags.has('--verify-auth'),resume:flags.has('--resume')};
 }else{
  if(flags.size)throw new Error('Use --env for environment-based execution');
  if(process.stdin.isTTY)process.stdin.setRawMode(true);
@@ -30,9 +30,9 @@ const lease=await(await request('POST',{action:'begin'})).json();headers.Authori
 let heartbeatTask=Promise.resolve();
 const heartbeat=setInterval(()=>{heartbeatTask=request('POST',{action:'heartbeat'}).then(()=>{}).catch(()=>{leaseLost=true;process.exitCode=1;});},60_000);heartbeat.unref();
 try{
-let result=config.ocrOnly?null:await(await request('POST',{action:'run'})).json();
+let result=config.ocrOnly?null:await(await request('POST',{action:'run',...(config.resume?{discover:false}:{})})).json();
 const batches=result?[result]:[];
-for(let pass=0;result?.remaining>0&&pass<19;pass++){result=await(await request('POST',{action:'run',discover:false})).json();batches.push(result);console.log(JSON.stringify({phase:'collection',batch:batches.length,remaining:result.remaining,new:result.new}));}
+for(let pass=0;result?.remaining>0&&pass<79;pass++){result=await(await request('POST',{action:'run',discover:false})).json();batches.push(result);console.log(JSON.stringify({phase:'collection',batch:batches.length,remaining:result.remaining,new:result.new}));}
 await mkdir('.sites-runtime/ocr-cache',{recursive:true});
 const queue=await(await request()).json();if(config.ids)queue.candidates=queue.candidates.filter(row=>config.ids.includes(row.id));let worker,done=0,failed=0;
 try{
