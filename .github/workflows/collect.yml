@@ -27,6 +27,8 @@ jobs:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
       - run: npm test
+      - name: Verify free Tesseract runtime with synthetic text
+        run: node scripts/ocr-smoke.mjs
       - name: Run collector without publishing private data in public logs
         env:
           NNSS_ORIGIN: https://nnss.kr
