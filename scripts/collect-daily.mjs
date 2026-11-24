@@ -22,7 +22,7 @@ const endpoint=new URL('/api/collector/work',origin);
 if(typeof config.collectorToken!=='string'||!config.collectorToken)throw new Error('Dedicated collector authentication is required.');
 const headers={Authorization:`Bearer ${config.collectorToken}`};
 let leaseLost=false;
-async function request(method='GET',body,path=endpoint){if(leaseLost&&body?.action!=='end')throw new Error('Collector lease was lost; stopping this run.');const r=await fetch(path,{method,headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(['heartbeat','end'].includes(body?.action)?20000:600000)});if(!r.ok){const error=new Error(`Collector HTTP ${r.status}`);error.status=r.status;throw error;}return r;}
+async function request(method='GET',body,path=endpoint){if(leaseLost&&body?.action!=='end')throw new Error('Collector lease was lost; stopping this run.');const r=await fetch(path,{method,headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(['heartbeat','end'].includes(body?.action)?20000:600000)});if(!r.ok){const error=new Error(`Collector HTTP ${r.status}`);error.status=r.status;const details=await r.text(),upstream=details.match(/원본 HTTP (\d{3})/);if(upstream)error.upstreamStatus=Number(upstream[1]);throw error;}return r;}
 if(config.statusOnly){const snapshot=await(await request()).json();console.log(JSON.stringify({phase:'status',lastRun:snapshot.lastRun,ocrQueue:snapshot.candidates.length}));process.exit(0);}
 if(config.verifyAuth){const lease=await(await request('POST',{action:'begin'})).json();headers.Authorization=`Bearer ${config.collectorToken}.${lease.runToken}`;try{await request('POST',{action:'heartbeat'});console.log(JSON.stringify({phase:'authentication',verified:true}));}finally{await request('POST',{action:'end'});}process.exit(0);}
 // One lease spans discovery, every batch, OCR and finalization. Never log the run token.
@@ -47,7 +47,7 @@ try{
      const recognized=await recognizePoster(worker,bytes);
      if(recognized.confidence>=45&&recognized.text.trim()){text+='\n'+recognized.text;pages.push({url:draft.images[i],text:recognized.text.slice(0,40000),mode:recognized.mode,confidence:recognized.confidence});}
      else {error=true;failures.push({url:draft.images[i],code:'quality',...(Number.isFinite(recognized.confidence)?{confidence:Math.max(0,Math.min(100,recognized.confidence))}:{}),characters:Math.min(100000,recognized.text.length)});}
-    }catch(e){error=true;failures.push({url:draft.images[i],code:e.status?'http':/OCR timeout/.test(e.message)?'timeout':'recognition',...(e.status?{status:e.status}:{})});if(!e.status&&worker){await worker.terminate();worker=null;}console.log(JSON.stringify({phase:'image-error',id:row.id,index:i,message:String(e.message).slice(0,180)}));}
+    }catch(e){error=true;failures.push({url:draft.images[i],code:e.status?'http':/OCR timeout/.test(e.message)?'timeout':'recognition',...(e.status?{status:e.status}:{}),...(e.upstreamStatus?{upstreamStatus:e.upstreamStatus}:{})});if(!e.status&&worker){await worker.terminate();worker=null;}console.log(JSON.stringify({phase:'image-error',id:row.id,index:i,message:String(e.message).slice(0,180)}));}
    }
 
   }catch(e){console.log(JSON.stringify({phase:'ocr-error',id:row.id,message:String(e.message).slice(0,180)}));error=true;if(worker){await worker.terminate();worker=null;}}
