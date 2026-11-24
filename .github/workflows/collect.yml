@@ -1,0 +1,53 @@
+name: NNSS daily collector
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Authentication check or collection
+        type: choice
+        options: [verify-auth, run, status-only]
+        default: verify-auth
+permissions:
+  contents: read
+concurrency:
+  group: nnss-collector
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - name: Run collector without publishing private data in public logs
+        env:
+          NNSS_ORIGIN: https://nnss.kr
+          NNSS_COLLECTOR_TOKEN: ${{ secrets.NNSS_COLLECTOR_TOKEN }}
+          RUN_MODE: ${{ github.event_name == 'schedule' && 'run' || inputs.mode }}
+        shell: bash
+        run: |
+          set -eu
+          test -n "$NNSS_COLLECTOR_TOKEN" || { echo 'Collector secret is missing'; exit 1; }
+          run_log=$(mktemp)
+          trap 'rm -f "$run_log"' EXIT
+          args=(--env)
+          case "$RUN_MODE" in
+            verify-auth) args+=(--verify-auth) ;;
+            status-only) args+=(--status-only) ;;
+            run) ;;
+            *) echo 'Invalid mode'; exit 1 ;;
+          esac
+          if node scripts/collect-daily.mjs "${args[@]}" >"$run_log" 2>&1; then
+            echo 'Collector completed and persisted state was verified.'
+          else
+            echo 'Collector failed or finished partially. Review the private NNSS administration collection history.'
+            exit 1
+          fi
