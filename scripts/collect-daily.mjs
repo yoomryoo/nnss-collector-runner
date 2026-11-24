@@ -37,22 +37,22 @@ await mkdir('.sites-runtime/ocr-cache',{recursive:true});
 const queue=await(await request()).json();if(config.ids)queue.candidates=queue.candidates.filter(row=>config.ids.includes(row.id));let worker,done=0,failed=0;
 try{
  for(const row of queue.candidates.slice(0,config.maxOcr||queue.candidates.length)){
-  const draft=JSON.parse(row.draftJson);let text='',error=false;const pages=[];
+  const draft=JSON.parse(row.draftJson);let text='',error=false;const pages=[],failures=[];
   try{
-   worker??=await createWorker(['kor','eng'],1,{cachePath:'.sites-runtime/ocr-cache',logger:()=>{}});
    for(let i=0;i<Math.min(3,draft.images.length);i++){
     try{
      const path=new URL(endpoint);path.searchParams.set('image',row.id);path.searchParams.set('index',String(i));
      const bytes=Buffer.from(await(await request('GET',null,path)).arrayBuffer());
+     worker??=await createWorker(['kor','eng'],1,{cachePath:'.sites-runtime/ocr-cache',logger:()=>{}});
      const recognized=await recognizePoster(worker,bytes);
      if(recognized.confidence>=45&&recognized.text.trim()){text+='\n'+recognized.text;pages.push({url:draft.images[i],text:recognized.text.slice(0,40000),mode:recognized.mode,confidence:recognized.confidence});}
-     else error=true;
-    }catch(e){error=true;console.log(JSON.stringify({phase:'image-error',id:row.id,index:i,message:String(e.message).slice(0,180)}));}
+     else {error=true;failures.push({url:draft.images[i],code:'quality',...(Number.isFinite(recognized.confidence)?{confidence:Math.max(0,Math.min(100,recognized.confidence))}:{}),characters:Math.min(100000,recognized.text.length)});}
+    }catch(e){error=true;failures.push({url:draft.images[i],code:e.status?'http':/OCR timeout/.test(e.message)?'timeout':'recognition',...(e.status?{status:e.status}:{})});if(!e.status&&worker){await worker.terminate();worker=null;}console.log(JSON.stringify({phase:'image-error',id:row.id,index:i,message:String(e.message).slice(0,180)}));}
    }
 
   }catch(e){console.log(JSON.stringify({phase:'ocr-error',id:row.id,message:String(e.message).slice(0,180)}));error=true;if(worker){await worker.terminate();worker=null;}}
   if(!text.trim()&&draft.images.length)error=true;
-  try{await request('POST',{action:'ocr',id:row.id,revision:row.revision,text:text.slice(0,40000),failed:error,pages,version:2});}catch(e){if(e.status===409||e.status===404)continue;throw e;}if(error)failed++;else done++;if((done+failed)%5===0)console.log(JSON.stringify({phase:'ocr',done,failed,total:queue.candidates.length}));
+  try{await request('POST',{action:'ocr',id:row.id,revision:row.revision,text:text.slice(0,40000),failed:error,pages,failures,version:2});}catch(e){if(e.status===409||e.status===404)continue;throw e;}if(error)failed++;else done++;if((done+failed)%5===0)console.log(JSON.stringify({phase:'ocr',done,failed,total:queue.candidates.length}));
  }
 }finally{if(worker)await worker.terminate();}
 const finished=await(await request('POST',{action:'finish',ids:batches.map(b=>b.runId),ocr:{done,failed}})).json();

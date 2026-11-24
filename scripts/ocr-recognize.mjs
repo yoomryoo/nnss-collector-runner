@@ -4,8 +4,8 @@ export async function recognizePoster(worker,bytes){
  const image=await sharp(bytes,{limitInputPixels:40_000_000}).rotate().resize({width:2400,withoutEnlargement:true}).png().toBuffer();
      const metadata=await sharp(image).metadata();
      const recognize=async buffer=>{
-      const recognized=await Promise.race([worker.recognize(buffer,{}, {tsv:true}),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('OCR timeout')),90000);timer.unref();})]);
-      return recognized.data;
+      let timer;
+      try{const recognized=await Promise.race([worker.recognize(buffer,{}, {tsv:true}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OCR timeout')),90000);timer.unref();})]);return recognized.data;}finally{clearTimeout(timer);}
      };
      let data=await recognize(image),layout=layoutText(data.tsv,metadata.width,data.text),mode=layout.columns===2?'position-columns':'position-lines';
      // A second pass uses real crops, so columns cannot be interleaved by the OCR engine.
