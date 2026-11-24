@@ -11,3 +11,5 @@ Set NNSS_COLLECTOR_TOKEN only as an Actions repository secret. Manually dispatch
 Public job logs intentionally contain no collection output or private source data. Job failure is visible in Actions and GitHub notification settings. Do not publish logs or upload artifacts.
 
 Never trigger this credential-bearing job from pull_request or pull_request_target events. Default GITHUB_TOKEN permission is read-only; checkout credentials are not persisted.
+
+Use manual mode `resume` after an interrupted run to process existing pending sources and OCR without repeating NAVER discovery searches. Requests process five article groups at a time, with up to 80 batches. Search/sort URL variants of one board post are grouped on the server; edition and article identifiers remain distinct. Confirm final saved state and remaining count; an incomplete or partial run remains a failure.
