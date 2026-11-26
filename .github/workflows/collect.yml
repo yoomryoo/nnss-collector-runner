@@ -29,6 +29,12 @@ jobs:
       - run: npm test
       - name: Verify free Tesseract runtime with synthetic text
         run: node scripts/ocr-smoke.mjs
+      - name: Prepare stored poster thumbnails
+        continue-on-error: true
+        env:
+          NNSS_ORIGIN: https://nnss.kr
+          NNSS_COLLECTOR_TOKEN: ${{ secrets.NNSS_COLLECTOR_TOKEN }}
+        run: node scripts/poster-thumbnails.mjs
       - name: Run collector without publishing private data in public logs
         env:
           NNSS_ORIGIN: https://nnss.kr
